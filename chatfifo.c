@@ -4,6 +4,7 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <sys/stat.h>
+#include <sys/types.h>
 
 #define FIFO1 "fifo1"
 #define FIFO2 "fifo2"
@@ -14,30 +15,31 @@ void chat(const char *read_fifo, const char *write_fifo) {
     char msg[MAX_MSG];
     int fd_read, fd_write;
 
-    // Abrimos los FIFOs
-    fd_read = open(read_fifo, O_RDONLY);
-    if (fd_read == -1) {
-        perror("Error al abrir FIFO de lectura");
-        exit(1);
-    }
-
+    // Abrimos el FIFO de escritura primero (importante para evitar bloqueo)
     fd_write = open(write_fifo, O_WRONLY);
     if (fd_write == -1) {
         perror("Error al abrir FIFO de escritura");
-        close(fd_read);
+        exit(1);
+    }
+
+    fd_read = open(read_fifo, O_RDONLY);
+    if (fd_read == -1) {
+        perror("Error al abrir FIFO de lectura");
+        close(fd_write);
         exit(1);
     }
 
     printf("Chat iniciado. Escribe \"%s\" para salir.\n", STOP_WORD);
 
-    // Creamos un proceso para leer y otro para escribir
-    if (fork() == 0) {
+    pid_t pid = fork();
+
+    if (pid == 0) {
         // Proceso hijo: lectura
         while (1) {
             memset(msg, 0, MAX_MSG);
             if (read(fd_read, msg, MAX_MSG) > 0) {
                 if (strcmp(msg, STOP_WORD) == 0) {
-                    printf("\nEl otro usuario ha salido.\n");
+                    printf("\nEl otro usuario ha salido del chat.\n");
                     exit(0);
                 }
                 printf("Otro: %s", msg);
@@ -52,6 +54,7 @@ void chat(const char *read_fifo, const char *write_fifo) {
             write(fd_write, msg, strlen(msg));
             if (strcmp(msg, STOP_WORD) == 0) {
                 printf("Saliendo del chat...\n");
+                kill(pid, SIGTERM);
                 exit(0);
             }
         }
@@ -67,7 +70,6 @@ int main(int argc, char *argv[]) {
     }
 
     if (strcmp(argv[1], "1") == 0) {
-        // Crear los FIFOs si no existen
         mkfifo(FIFO1, 0666);
         mkfifo(FIFO2, 0666);
         chat(FIFO1, FIFO2);

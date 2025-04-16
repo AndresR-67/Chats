@@ -148,13 +148,13 @@ void cocina() {
     }
 }
 
-// Proceso cliente: envía pedidos seguir comentando abajo
+// Proceso cliente
 void cliente() {
     int shm_fd;
     ColaPedidos *cola;
     sem_t *mutex, *sem_nuevo_pedido, *sem_confirmacion, *sem_ids;
 
-    // Conectamos con la memoria compartida y semáforos
+    // Conexion con el semaforo y con la memoria compartida
     shm_fd = shm_open(SHM_NAME, O_RDWR, 0666);
     cola = mmap(0, sizeof(ColaPedidos), PROT_READ | PROT_WRITE, MAP_SHARED, shm_fd, 0);
 
@@ -166,7 +166,7 @@ void cliente() {
     int id;
     char texto[MAX_PEDIDO_LEN];
 
-    // Generar ID único (protegido por semáforo)
+    // Generador de ID unico, protegido con el semaforo
     sem_wait(sem_ids);
     id = cola->siguiente_id++;
     sem_post(sem_ids);
@@ -181,7 +181,7 @@ void cliente() {
 
         if (strlen(texto) == 0) continue;
 
-        sem_wait(mutex); // Exclusión mutua para acceder a la cola
+        sem_wait(mutex); // Exclusion mutua para acceder a la cola
 
         if (cola->total_en_cola == MAX_PEDIDOS) {
             // Cola llena
@@ -190,25 +190,25 @@ void cliente() {
             continue;
         }
 
-        // Agregamos el pedido al final de la cola
+        // Colocar pedido al final de la cola
         Pedido *nuevo = &cola->pedidos[cola->indice_fin];
         nuevo->cliente_id = id;
         strncpy(nuevo->texto_pedido, texto, MAX_PEDIDO_LEN);
         nuevo->fue_recibido = 0;
         nuevo->esta_listo = 0;
 
-        // Actualizamos índice y contador
+        // Actualizacion del indice y del contador
         cola->indice_fin = (cola->indice_fin + 1) % MAX_PEDIDOS;
         cola->total_en_cola++;
 
-        sem_post(mutex);             // Liberamos el acceso a la cola
-        sem_post(sem_nuevo_pedido);  // Avisamos a cocina que hay un nuevo pedido
+        sem_post(mutex);             // Liberacion del  acceso a la cola
+        sem_post(sem_nuevo_pedido);  // Aviso a la cocina de que hay un nuevo pedido
 
-        // Esperamos a que cocina confirme la recepción
-        sem_wait(sem_confirmacion);
+    
+        sem_wait(sem_confirmacion); //Espera para que la cocina confirme que lo recibio
         printf("[Cliente %d] Pedido recibido. Esperando preparación...\n", id);
 
-        // Esperamos activamente a que el pedido esté listo
+        //Espera de los pedidos
         while (1) {
             sem_wait(mutex);
             int listo = 0;
@@ -220,7 +220,7 @@ void cliente() {
             }
             sem_post(mutex);
             if (listo) break;
-            sleep(1); // Esperamos antes de revisar otra vez
+            sleep(1); // Espera antes de volver a revisar 
         }
 
         printf("[Cliente %d] Pedido preparado. ¡Buen provecho!\n", id);
@@ -242,7 +242,7 @@ int main(int argc, char *argv[]) {
         return 1;
     }
 
-    // Según el argumento, ejecutamos el módulo correspondiente
+    
     if (strcmp(argv[1], "cliente") == 0) {
         cliente();
     } else if (strcmp(argv[1], "cocina") == 0) {
